@@ -326,7 +326,7 @@ namespace Playnite
                 {
                     if (!AppSettings.FirstTimeWizardComplete)
                     {
-                        var cultName = System.Globalization.CultureInfo.CurrentCulture.Name.Replace('-', '_');
+                        var cultName = System.Globalization.CultureInfo.CurrentUICulture.Name.Replace('-', '_');
                         var validLang = Localization.AvailableLanguages.FirstOrDefault(a => a.Id == cultName && a.TranslatedPercentage > 75);
                         if (validLang != null)
                         {
@@ -494,32 +494,6 @@ namespace Playnite
                 return;
             }
 
-            // unchecked use reason: https://stackoverflow.com/a/10043486/1107424
-
-                // Have nonsense crashes with this about normal .NET runtime methods and Playnite class methods missing.
-            if (exception is MissingMethodException ||
-                exception is BadImageFormatException ||
-                // Usually COM execution error from WindowsAPICodePack when opening folder selection dialog. As far as I can tell, this happens on "debloated" Windows edition only.
-                (exception is System.Runtime.InteropServices.COMException &&
-                    (exception.HResult == unchecked((int)0x80004005) || exception.HResult == unchecked((int)0x80040111))))
-            {
-                Dialogs.ShowErrorMessage("Corrupted Playnite or Windows install detected.");
-                Process.GetCurrentProcess().Kill();
-                return;
-            }
-
-                // ERROR_DISK_FULL
-            if (exception.HResult == unchecked((int)0x80070070) ||
-                // "device not ready" error. Happens when people run Playnite from attached storage as far as I can tell.
-                exception.HResult == unchecked((int)0x80070015) ||
-                // self-explanatory
-                exception is OutOfMemoryException)
-            {
-                Dialogs.ShowErrorMessage(exception.Message, LOC.CrashWindowTitle.GetLocalized());
-                Process.GetCurrentProcess().Kill();
-                return;
-            }
-
             if (crashInfo.IsExtensionCrash)
             {
                 crashModel = new CrashHandlerViewModel(
@@ -532,6 +506,32 @@ namespace Playnite
             }
             else
             {
+                // unchecked use reason: https://stackoverflow.com/a/10043486/1107424
+
+                // Have nonsense crashes with this about normal .NET runtime methods and Playnite class methods missing.
+                if (exception is MissingMethodException ||
+                    exception is BadImageFormatException ||
+                    // Usually COM execution error from WindowsAPICodePack when opening folder selection dialog. As far as I can tell, this happens on "debloated" Windows edition only.
+                    (exception is System.Runtime.InteropServices.COMException &&
+                     (exception.HResult == unchecked((int)0x80004005) || exception.HResult == unchecked((int)0x80040111))))
+                {
+                    Dialogs.ShowErrorMessage("Corrupted Playnite or Windows install detected.");
+                    Process.GetCurrentProcess().Kill();
+                    return;
+                }
+
+                // ERROR_DISK_FULL
+                if (exception.HResult == unchecked((int)0x80070070) ||
+                    // "device not ready" error. Happens when people run Playnite from attached storage as far as I can tell.
+                    exception.HResult == unchecked((int)0x80070015) ||
+                    // self-explanatory
+                    exception is OutOfMemoryException)
+                {
+                    Dialogs.ShowErrorMessage(exception.Message, LOC.CrashWindowTitle.GetLocalized());
+                    Process.GetCurrentProcess().Kill();
+                    return;
+                }
+
                 crashModel = new CrashHandlerViewModel(
                     new CrashHandlerWindowFactory(),
                     Dialogs,
@@ -588,9 +588,9 @@ namespace Playnite
                     {
                         Restart(new CmdLineOptions
                         {
-                            SkipLibUpdate = true,
                             StartClosedToTray = CmdLine.StartClosedToTray,
-                            HideSplashScreen = CmdLine.HideSplashScreen
+                            HideSplashScreen = CmdLine.HideSplashScreen,
+                            StartInFullscreen = CmdLine.StartInFullscreen
                         }, false);
                     }
                 }
@@ -627,7 +627,7 @@ namespace Playnite
                 {
                     if (restoreOptions == null || !restoreOptions.ClosedWhenDone)
                     {
-                        Restart(new CmdLineOptions { SkipLibUpdate = true }, false);
+                        Restart(new CmdLineOptions(), false);
                     }
                 }
 
@@ -821,8 +821,7 @@ namespace Playnite
                     {
                         Restart(new CmdLineOptions
                         {
-                            Backup = args.Args,
-                            SkipLibUpdate = true
+                            Backup = args.Args
                         });
                     }
                     break;
@@ -842,8 +841,7 @@ namespace Playnite
                     {
                         Restart(new CmdLineOptions
                         {
-                            RestoreBackup = args.Args,
-                            SkipLibUpdate = true
+                            RestoreBackup = args.Args
                         });
                     }
                     break;
