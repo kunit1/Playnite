@@ -19,7 +19,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -50,8 +49,7 @@ namespace Playnite.FullscreenApp
         public static IntPtr ActivateSound { get; private set; }
         public static IntPtr BackgroundMusic { get; private set; }
         public GameControllerManager GameController { get; private set; }
-        private CancellationTokenSource _SDLEventLoopCancellationTokenSource;
-        private Task _SDLEventLoopRunningTask;
+        private bool exitSDLEventLoop = false;
 
         public new static FullscreenApplication Current
         {
@@ -164,10 +162,6 @@ namespace Playnite.FullscreenApp
 
                 if (GameController != null && AppSettings.Fullscreen.EnableGameControllerSupport)
                 {
-                    // Restart SDL event loop to avoid input issues when restoring from minimized state
-                    CancelSDLEventLoop();
-                    Task sdlEventLoopTask = SDLEventLoop();
-
                     GameController.StandardProcessingEnabled = IsActive;
                 }
             }
@@ -248,7 +242,7 @@ namespace Playnite.FullscreenApp
                 return;
             }
 
-            CancelSDLEventLoop();
+            exitSDLEventLoop = true;
             GameController?.Dispose();
             if (Audio != null)
             {
@@ -302,26 +296,16 @@ namespace Playnite.FullscreenApp
             // https://github.com/JosefNemec/Playnite/issues/3794
             SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "0");
             SDL_GameControllerEventState(SDL_IGNORE);
-            Task sdlEventLoopTask = SDLEventLoop();
+            SDLEventLoop();
             sdlInitialized = true;
         }
 
-        private void CancelSDLEventLoop()
-        {
-            if (_SDLEventLoopCancellationTokenSource != null && !_SDLEventLoopCancellationTokenSource.IsCancellationRequested)
-            {
-                _SDLEventLoopCancellationTokenSource.Cancel();
-            }
-        }
 
-        private async Task SDLEventLoop()
+        private void SDLEventLoop()
         {
-            _SDLEventLoopCancellationTokenSource = new CancellationTokenSource();
-            CancellationToken token = _SDLEventLoopCancellationTokenSource.Token;
-
-            _SDLEventLoopRunningTask = Task.Run(async () =>
+            Task.Run(async () =>
             {
-                while (!token.IsCancellationRequested)
+                while (!exitSDLEventLoop)
                 {
                     while (SDL_PollEvent(out var sdlEvent) == 1)
                     {
@@ -345,18 +329,9 @@ namespace Playnite.FullscreenApp
                             Audio.CloseAudio();
                     }
 
-                    try
-                    {
-                        await Task.Delay(16, token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
+                    await Task.Delay(16);
                 }
-            }, token);
-
-            await _SDLEventLoopRunningTask;
+            });
         }
 
         public void SetupInputs()
